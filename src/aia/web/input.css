@@ -4,6 +4,21 @@
   --font-sans: ui-sans-serif, system-ui, sans-serif;
 }
 
+.dashboard-main {
+  position: relative;
+}
+
+.dashboard-main::after {
+  position: absolute;
+  z-index: 20;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 1px;
+  background-color: var(--theme-border, var(--color-slate-200));
+  content: "";
+  pointer-events: none;
+}
+
 body[data-theme="dark"] {
   color-scheme: dark;
   background-color: #0f172a;
