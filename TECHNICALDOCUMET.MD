@@ -17,6 +17,8 @@ The system is divided into:
 - **Database:** `src/aia/sql/init.sql` initializes new databases; `src/aia/sql/migrations/` contains changes for existing database volumes.
 - **Container orchestration:** `docker-compose.yml` runs PostgreSQL, the API, Ollama, and the database migration/model initialization jobs.
 
+The dashboard offers Light, Dark, Dracula, Nord, and High Contrast themes. It saves the selected theme in browser local storage and restores it on the next visit.
+
 ## 2. Ticket Processing Lifecycle
 
 1. A client submits `email_content` to `POST /api/tickets`.
@@ -24,10 +26,11 @@ The system is divided into:
 3. `post_ticket` calls `process_incoming_email`.
 4. The processing function requests structured `customer_id`, `issue_summary`, and `urgency` values from Gemini when configured. Ollama is used if Gemini is not configured or fails.
 5. The structured output is validated against `SupportTicketSchema`.
-6. `verify_customer_in_db` checks that the extracted customer exists and is active.
-7. A verified customer is marked `VERIFIED_EXISTING_CUSTOMER`. An unknown or inactive customer is marked `INVALID_OR_UNKNOWN_ID`, escalated for account-management review, and assigned high urgency.
-8. `save_ticket_to_db` stores the extracted fields and original email text and returns the persisted public ticket fields.
-9. The API returns HTTP 201. Processing failures are logged and surfaced as HTTP 503.
+6. If exactly one `CUST-####` identifier occurs in the original email, that exact identifier replaces the model's extracted value. If no ID occurs, a model-invented ID is rejected as `UNKNOWN`.
+7. `get_active_customer_company` verifies that the customer exists and is active and retrieves its company name.
+8. A verified customer is marked `VERIFIED_EXISTING_CUSTOMER`. An unknown or inactive customer is marked `INVALID_OR_UNKNOWN_ID`, escalated for account-management review, and assigned high urgency.
+9. `save_ticket_to_db` stores the extracted fields and original email text and returns the persisted public ticket fields, including company name when available.
+10. The API returns HTTP 201. Processing failures are logged and surfaced as HTTP 503.
 
 Ticket analysis and customer verification occur only as part of ticket creation. Listing, reading, status updates, health checks, and application startup do not analyze ticket text.
 
@@ -63,7 +66,9 @@ Pydantic model validating AI-extracted ticket fields:
 
 ### `TicketResponse`
 
-Pydantic response model for a ticket. Includes the identifier, customer ID, summary, urgency, verification result, action, status, and processing timestamp. It deliberately excludes the original email text.
+Pydantic response model for a ticket. Includes the identifier, customer ID, matched company name when available, summary, urgency, verification result, action, status, and processing timestamp. It deliberately excludes the original email text.
+
+`company_name` is joined from the customer table for list/detail responses and included when creating a ticket. It is `null` when the ID has no customer record.
 
 ### `CreateTicketRequest`
 
@@ -85,13 +90,13 @@ Pydantic response model containing the ticket ID and its updated status.
 
 Opens a psycopg2 PostgreSQL connection using the required `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` environment variables, plus `DB_PORT` (default `5432`). It raises `RuntimeError` listing any missing required setting names; it never falls back to an embedded database password. Callers use connection context managers to commit successful transactions or roll back failed ones.
 
-#### `verify_customer_in_db(customer_id)`
+#### `get_active_customer_company(customer_id)`
 
-Checks the `customers` table for an active record matching `customer_id`. Returns `True` if one exists and `False` otherwise.
+Checks the `customers` table for an active record matching `customer_id`. Returns the company name when found and `None` otherwise.
 
 #### `save_ticket_to_db(ticket_data, raw_content)`
 
-Inserts one analyzed ticket into `ai_support_tickets`, including the original source email, then returns the generated ID, public ticket fields, status, and processing timestamp. The original email is not part of API read responses.
+Inserts one analyzed ticket into `ai_support_tickets`, including the original source email, then returns the generated ID, public ticket fields, matched company name when available, status, and processing timestamp. The original email is not part of API read responses.
 
 #### `update_ticket_status(ticket_id, status)`
 
@@ -99,11 +104,11 @@ Updates a ticket’s workflow state and returns its ID and new status. Raises `T
 
 #### `list_tickets(date_from=None, date_to=None, limit=50, offset=0)`
 
-Returns public ticket records ordered by processing time descending, optionally filtered by inclusive processing dates and paginated with `limit` and `offset`. Original email content is excluded.
+Returns public ticket records ordered by processing time descending, optionally filtered by inclusive processing dates and paginated with `limit` and `offset`. Company names are joined from customer records; original email content is excluded.
 
 #### `get_ticket_by_id(ticket_id)`
 
-Returns one public ticket record without its original email. Raises `TicketNotFoundError` when the ticket is missing.
+Returns one ticket detail record, including a matched company name and the original submitted email. Raises `TicketNotFoundError` when the ticket is missing.
 
 #### `generate_ticket_with_ollama(prompt)`
 
@@ -149,14 +154,14 @@ Displays a short greeting when the `aia` package command is invoked. It is not t
 
 ## 5. REST API
 
-All ticket responses omit `raw_email_content`.
+Ticket list and creation responses omit `raw_email_content`. The individual ticket detail endpoint returns the original submitted email as `raw_email_content` for the dashboard accordion.
 
 | Method | Path | Purpose | Success |
 | --- | --- | --- | --- |
 | `GET` | `/` | Serve the web dashboard. | `200` |
 | `GET` | `/health` | Check API process responsiveness. | `200` |
 | `GET` | `/api/tickets` | List tickets with optional `date_from`, `date_to`, `limit`, and `offset`. | `200` |
-| `GET` | `/api/tickets/{ticket_id}` | Retrieve a ticket by ID. | `200` |
+| `GET` | `/api/tickets/{ticket_id}` | Retrieve full ticket details, including submitted description. | `200` |
 | `POST` | `/api/tickets` | Analyze submitted `email_content` and create a ticket. | `201` |
 | `PATCH` | `/api/tickets/{ticket_id}/status` | Update ticket workflow status. | `200` |
 
@@ -190,7 +195,7 @@ Important error responses include:
 | `processed_at` | `TIMESTAMP` | Processing time; defaults to the current timestamp. |
 | `status` | `VARCHAR(20)` | Workflow status; defaults to `new` and is constrained to supported values. |
 
-New database initialization creates schema without inserting sample customers or tickets. The status migration adds the `status` column and constraint to existing databases.
+New database initialization creates the schema without inserting tickets. During Compose startup, migration `002_seed_mock_customers.sql` inserts 30 fictional customers (`CUST-1001` through `CUST-1030`). The seed uses `ON CONFLICT DO NOTHING`, so it is safe to rerun and preserves any existing customer records. Migration `001_add_ticket_status.sql` adds the `status` column and constraint to existing databases.
 
 ## 7. AI Providers and Configuration
 

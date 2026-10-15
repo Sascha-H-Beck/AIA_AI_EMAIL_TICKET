@@ -21,16 +21,23 @@ router = APIRouter(prefix="/api/tickets", tags=["tickets"])
 
 
 class TicketResponse(BaseModel):
-    """Public representation of a ticket without its original email text."""
+    """Ticket fields returned by creation and list endpoints."""
 
     id: int
     customer_id: str
+    company_name: str | None
     issue_summary: str
     urgency: str
     database_status: str
     action_required: str
     status: TicketStatus
     processed_at: str
+
+
+class TicketDetailResponse(TicketResponse):
+    """Full ticket representation returned by the detail endpoint."""
+
+    raw_email_content: str
 
 
 class CreateTicketRequest(BaseModel):
@@ -74,11 +81,11 @@ def get_tickets(
 
 @router.get(
     "/{ticket_id}",
-    response_model=TicketResponse,
+    response_model=TicketDetailResponse,
     operation_id="getTicketByID",
 )
 def get_ticket(ticket_id: int) -> dict:
-    """Return a ticket by ID or report that it does not exist.
+    """Return full ticket details by ID or report that it does not exist.
 
     Args:
         ticket_id: Identifier of the requested ticket.

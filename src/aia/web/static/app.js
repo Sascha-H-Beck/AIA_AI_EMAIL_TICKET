@@ -5,6 +5,30 @@ let currentFilters = {};
 
 const listElement = document.querySelector("#ticket-list");
 const messageElement = document.querySelector("#ticket-message");
+const themeSelector = document.querySelector("#theme-selector");
+const themeColors = {
+  light: "#f5f7fb",
+  dark: "#0f172a",
+  dracula: "#282a36",
+  nord: "#2e3440",
+  "high-contrast": "#000000",
+};
+const badgeClasses = "inline-flex h-6 w-20 items-center justify-center whitespace-nowrap rounded-md px-2 text-[11px] font-bold";
+
+function applyTheme(theme) {
+  document.body.dataset.theme = theme;
+  themeSelector.value = theme;
+  document.querySelector('meta[name="theme-color"]').content = themeColors[theme];
+}
+
+const savedTheme = localStorage.getItem("aia-theme");
+applyTheme(Object.hasOwn(themeColors, savedTheme) ? savedTheme : "light");
+
+themeSelector.addEventListener("change", () => {
+  const theme = themeSelector.value;
+  applyTheme(theme);
+  localStorage.setItem("aia-theme", theme);
+});
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
@@ -29,7 +53,7 @@ function statusBadge(status) {
     done: "Done",
     rejected: "Rejected",
   };
-  return `<span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${styles[status] ?? "bg-slate-100 text-slate-700"}">${labels[status] ?? escapeHtml(status)}</span>`;
+  return `<span class="${badgeClasses} ${styles[status] ?? "bg-slate-100 text-slate-700"}">${labels[status] ?? escapeHtml(status)}</span>`;
 }
 
 function urgencyBadge(urgency) {
@@ -39,7 +63,7 @@ function urgencyBadge(urgency) {
     : normalized === "medium"
       ? "bg-orange-50 text-orange-700"
       : "bg-slate-100 text-slate-600";
-  return `<span class="font-bold ${styles} rounded-md px-2 py-1 text-xs">${escapeHtml(urgency)}</span>`;
+  return `<span class="${badgeClasses} ${styles}">${escapeHtml(urgency)}</span>`;
 }
 
 function formatDate(value) {
@@ -66,12 +90,12 @@ function renderTickets() {
   }
 
   listElement.innerHTML = tickets.map((ticket) => `
-    <tr class="transition hover:bg-slate-50/80">
+    <tr class="ticket-summary-row transition hover:bg-slate-50/80">
       <td class="max-w-[280px] px-5 py-4">
-        <div class="font-bold text-slate-900">#${ticket.id} · ${escapeHtml(ticket.issue_summary)}</div>
+        <button type="button" data-ticket-details="${ticket.id}" aria-expanded="false" aria-controls="ticket-details-${ticket.id}" class="w-full text-left font-bold text-slate-900 hover:text-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-600">#${ticket.id} · ${escapeHtml(ticket.issue_summary)}<span class="mt-1 block text-xs font-semibold text-indigo-600">View full ticket details</span></button>
         <div class="mt-1 line-clamp-1 text-xs text-slate-500">${escapeHtml(ticket.action_required)}</div>
       </td>
-      <td class="px-4 py-4"><span class="font-semibold">${escapeHtml(ticket.customer_id)}</span><div class="mt-1 text-[11px] text-slate-500">${escapeHtml(ticket.database_status.replaceAll("_", " ").toLowerCase())}</div></td>
+      <td class="px-4 py-4"><span class="block font-semibold">${escapeHtml(ticket.company_name ?? "Company not matched")}</span><span class="mt-1 block text-xs text-slate-600">${escapeHtml(ticket.customer_id)}</span><div class="mt-1 text-[11px] text-slate-500">${escapeHtml(ticket.database_status.replaceAll("_", " ").toLowerCase())}</div></td>
       <td class="px-4 py-4">${urgencyBadge(ticket.urgency)}</td>
       <td class="px-4 py-4">${statusBadge(ticket.status)}</td>
       <td class="whitespace-nowrap px-4 py-4 text-xs text-slate-600">${formatDate(ticket.processed_at)}</td>
@@ -84,7 +108,26 @@ function renderTickets() {
           <option value="rejected">Rejected</option>
         </select>
       </td>
+    </tr>
+    <tr id="ticket-details-${ticket.id}" hidden>
+      <td colspan="6" class="bg-slate-50 px-5 py-5">
+        <div data-ticket-detail-content="${ticket.id}" class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-700">Loading ticket details…</div>
+      </td>
     </tr>`).join("");
+}
+
+function renderTicketDetails(ticket) {
+  const companyName = ticket.company_name ?? "Company not matched";
+  const status = ticket.status.replaceAll("_", " ");
+  return `
+    <dl class="grid gap-5 sm:grid-cols-2">
+      <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Ticket ID</dt><dd class="mt-1 font-semibold text-slate-900">#${ticket.id}</dd></div>
+      <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Company</dt><dd class="mt-1 font-semibold text-slate-900">${escapeHtml(companyName)}</dd><dd class="text-xs text-slate-500">${escapeHtml(ticket.customer_id)}</dd></div>
+      <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Subject</dt><dd class="mt-1 font-semibold text-slate-900">${escapeHtml(ticket.issue_summary)}</dd></div>
+      <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Status</dt><dd class="mt-1">${statusBadge(ticket.status)} <span class="ml-1 text-xs text-slate-500">${escapeHtml(status)}</span></dd></div>
+      <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Priority</dt><dd class="mt-1">${urgencyBadge(ticket.urgency)}</dd></div>
+      <div class="sm:col-span-2"><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Description</dt><dd class="mt-2 whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-4 leading-6 text-slate-700">${escapeHtml(ticket.raw_email_content)}</dd></div>
+    </dl>`;
 }
 
 async function loadTickets() {
@@ -117,6 +160,34 @@ function setMessage(message, isError = false) {
   messageElement.classList.toggle("bg-emerald-50", !isError && Boolean(message));
   messageElement.classList.toggle("text-emerald-800", !isError && Boolean(message));
 }
+
+listElement.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-ticket-details]");
+  if (!button) return;
+
+  const ticketId = button.dataset.ticketDetails;
+  const detailsRow = document.querySelector(`#ticket-details-${ticketId}`);
+  const content = document.querySelector(`[data-ticket-detail-content="${ticketId}"]`);
+  const isExpanded = button.getAttribute("aria-expanded") === "true";
+  button.setAttribute("aria-expanded", String(!isExpanded));
+  detailsRow.hidden = isExpanded;
+  if (isExpanded || button.dataset.loaded === "true" || button.dataset.loading === "true") return;
+
+  button.dataset.loading = "true";
+  content.textContent = "Loading ticket details…";
+  try {
+    const response = await fetch(`/api/tickets/${ticketId}`);
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail ?? `Request failed (${response.status})`);
+    content.innerHTML = renderTicketDetails(result);
+    button.dataset.loaded = "true";
+  } catch (error) {
+    content.textContent = `Unable to load ticket details: ${error.message}`;
+    content.classList.add("text-rose-700");
+  } finally {
+    button.dataset.loading = "false";
+  }
+});
 
 document.querySelector("#refresh-button").addEventListener("click", () => loadTickets());
 document.querySelector("#date-filter").addEventListener("submit", (event) => {

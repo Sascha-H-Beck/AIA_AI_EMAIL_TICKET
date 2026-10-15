@@ -8,7 +8,7 @@ AIA is an AI-assisted support-ticket system with a web dashboard and a separate 
 - `src/aia/api/` contains the FastAPI application and ticket endpoints.
 - `src/aia/web/` contains the dashboard HTML, JavaScript, and Tailwind CSS source.
 - `src/aia/sql/init.sql` creates empty customer and support-ticket tables; new tickets start with the `new` status.
-- `src/aia/sql/migrations/001_add_ticket_status.sql` adds status persistence to existing PostgreSQL databases.
+- `src/aia/sql/migrations/` contains the ticket-status migration and idempotent mock-customer seed for existing PostgreSQL databases.
 - `pyproject.toml` declares the Python package and dependencies; `uv.lock` pins the resolved dependencies.
 - `package.json` and `package-lock.json` pin the Tailwind CSS CLI used to build production CSS.
 - `Dockerfile` builds the Tailwind assets and Python API image.
@@ -65,15 +65,16 @@ Open the web dashboard at `http://localhost:8000` (or the configured `API_PORT`)
 docker compose logs -f ticket_api
 ```
 
-Compose starts PostgreSQL and Ollama, applies the idempotent ticket-status migration, pulls the configured local model if needed, then starts the API service. Existing tickets receive the `new` status. The model and database remain in named volumes. Gemini credentials are optional; if Gemini is unavailable, Ollama handles inference.
+Compose starts PostgreSQL and Ollama, applies the ticket-status migration and mock-customer seed, pulls the configured local model if needed, then starts the API service. The seed provides 30 fictional companies with customer IDs `CUST-1001` through `CUST-1030`; applying it repeatedly does not duplicate or overwrite existing customers. Existing tickets receive the `new` status. The model and database remain in named volumes. Gemini credentials are optional; if Gemini is unavailable, Ollama handles inference.
 
-A fresh database contains no sample customers or tickets. Ticket text is analyzed, customer-checked, and stored only when a ticket is submitted through `POST /api/tickets` or the dashboard. Until customer records are populated, submitted customer IDs will not verify and will be flagged for account-management review.
+A fresh database starts with the schema and receives the mock customer records from the migration job. It contains no sample tickets. Ticket text is analyzed, customer-checked, and stored only when a ticket is submitted through `POST /api/tickets` or the dashboard. When an email contains one `CUST-####` ID, that exact ID is used instead of an inconsistent model extraction. The dashboard displays the matched company name; IDs outside the seed set are flagged for account-management review and shown without a company name until added to the customer table.
 
 The API binds to localhost by default. This is appropriate for local development; add authentication and access controls before exposing ticket data to a network.
 
 ## Dashboard features
 
 - Browse tickets with 25 rows per page.
+- Choose Light, Dark, Dracula, Nord, or High Contrast themes; the selection is saved in the browser.
 - Filter for **Today**, choose a single date or inclusive date range, or use **All** to clear filters and browse the latest tickets.
 - Update a ticket to **In progress**, **Done**, or **Rejected**.
 - Create a ticket by submitting support email text for AI analysis.
@@ -81,12 +82,12 @@ The API binds to localhost by default. This is appropriate for local development
 
 ## REST API
 
-All ticket responses omit the original raw email content.
+Ticket list and creation responses omit the original email. `GET /api/tickets/{ticket_id}` returns the full submitted email as `raw_email_content` for the dashboard's expandable ticket details.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/tickets` | List tickets; optional `date_from`, `date_to`, `limit`, and `offset` query parameters |
-| `GET` | `/api/tickets/{ticket_id}` | Read a ticket by ID |
+| `GET` | `/api/tickets/{ticket_id}` | Read a ticket and its full submitted description by ID |
 | `POST` | `/api/tickets` | Create a ticket from `{"email_content": "..."}`; returns `201` and the persisted ticket |
 | `PATCH` | `/api/tickets/{ticket_id}/status` | Set status to `in_progress`, `done`, or `rejected` |
 | `GET` | `/health` | API health check |

@@ -1,6 +1,7 @@
 """Ticket analysis, customer verification, and PostgreSQL persistence."""
 
 import os
+import re
 from datetime import date
 from enum import Enum
 
@@ -75,20 +76,25 @@ def get_db_connection():
         port=os.getenv("DB_PORT", "5432")
     )
 
-def verify_customer_in_db(customer_id: str) -> bool:
-    """Check whether an active customer record exists for the supplied ID.
+def get_active_customer_company(customer_id: str) -> str | None:
+    """Return the company name for an active customer ID, if it exists.
 
     Args:
         customer_id: Customer identifier extracted from the ticket text.
 
     Returns:
-        True if an active customer exists; otherwise, False.
+        The active customer's company name, or None if no active match exists.
     """
-    query = "SELECT 1 FROM customers WHERE customer_id = %s AND is_active = TRUE;"
+    query = """
+        SELECT company_name
+        FROM customers
+        WHERE customer_id = %s AND is_active = TRUE;
+    """
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(query, (customer_id,))
-            return cur.fetchone() is not None
+            customer = cur.fetchone()
+            return customer[0] if customer is not None else None
 
 def save_ticket_to_db(ticket_data: dict, raw_content: str) -> dict:
     """Insert a processed ticket and return its public persisted fields.
@@ -119,6 +125,18 @@ def save_ticket_to_db(ticket_data: dict, raw_content: str) -> dict:
                 TicketStatus.NEW.value,
             ))
             ticket = dict(cur.fetchone())
+            cur.execute(
+                """
+                SELECT company_name
+                FROM customers
+                WHERE customer_id = %s;
+                """,
+                (ticket["customer_id"],),
+            )
+            customer = cur.fetchone()
+            ticket["company_name"] = (
+                customer["company_name"] if customer is not None else None
+            )
     ticket["processed_at"] = ticket["processed_at"].isoformat()
     return ticket
 
@@ -171,19 +189,21 @@ def list_tickets(
     conditions = []
     parameters = []
     if date_from is not None:
-        conditions.append("processed_at::date >= %s")
+        conditions.append("tickets.processed_at::date >= %s")
         parameters.append(date_from)
     if date_to is not None:
-        conditions.append("processed_at::date <= %s")
+        conditions.append("tickets.processed_at::date <= %s")
         parameters.append(date_to)
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     query = f"""
-        SELECT id, customer_id, issue_summary, urgency, database_status,
-               action_required, status, processed_at
-        FROM ai_support_tickets
+        SELECT tickets.id, tickets.customer_id, customers.company_name,
+               tickets.issue_summary, tickets.urgency, tickets.database_status,
+               tickets.action_required, tickets.status, tickets.processed_at
+        FROM ai_support_tickets AS tickets
+        LEFT JOIN customers ON customers.customer_id = tickets.customer_id
         {where_clause}
-        ORDER BY processed_at DESC, id DESC
+        ORDER BY tickets.processed_at DESC, tickets.id DESC
         LIMIT %s OFFSET %s;
     """
     parameters.extend((limit, offset))
@@ -197,22 +217,25 @@ def list_tickets(
 
 
 def get_ticket_by_id(ticket_id: int) -> dict:
-    """Fetch one public ticket record without exposing its original email.
+    """Fetch a ticket and its full description for the ticket detail view.
 
     Args:
         ticket_id: Database identifier of the requested ticket.
 
     Returns:
-        The public ticket record.
+        The ticket record, including its original submitted email content.
 
     Raises:
         TicketNotFoundError: If no ticket has the supplied ID.
     """
     query = """
-        SELECT id, customer_id, issue_summary, urgency, database_status,
-               action_required, status, processed_at
-        FROM ai_support_tickets
-        WHERE id = %s;
+        SELECT tickets.id, tickets.customer_id, customers.company_name,
+               tickets.issue_summary, tickets.urgency, tickets.database_status,
+               tickets.action_required, tickets.status, tickets.processed_at,
+               tickets.raw_email_content
+        FROM ai_support_tickets AS tickets
+        LEFT JOIN customers ON customers.customer_id = tickets.customer_id
+        WHERE tickets.id = %s;
     """
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -328,11 +351,29 @@ def process_incoming_email(email_content: str) -> dict:
         except Exception as ollama_error:
             raise TicketProcessingError("Ticket analysis failed with Ollama") from ollama_error
 
-    extracted_id = ticket_data["customer_id"]
+    email_customer_ids = {
+        customer_id.upper()
+        for customer_id in re.findall(
+            r"(?<![A-Z0-9])CUST-\d{4}(?!\d)",
+            email_content,
+            flags=re.IGNORECASE,
+        )
+    }
+    extracted_id = ticket_data["customer_id"].upper()
+    if len(email_customer_ids) == 1:
+        extracted_id = next(iter(email_customer_ids))
+    elif extracted_id not in email_customer_ids:
+        extracted_id = "UNKNOWN"
+    ticket_data["customer_id"] = extracted_id
     print(f"✅ [KI-Extraktion] Erfolgreich strukturiert. Extrahierte ID: {extracted_id}")
 
     try:
-        if extracted_id != "UNKNOWN" and verify_customer_in_db(extracted_id):
+        company_name = (
+            get_active_customer_company(extracted_id)
+            if extracted_id != "UNKNOWN"
+            else None
+        )
+        if company_name is not None:
             ticket_data["database_status"] = "VERIFIED_EXISTING_CUSTOMER"
             ticket_data["action_required"] = "Direktes Routing in die technische Fachabteilung."
         else:

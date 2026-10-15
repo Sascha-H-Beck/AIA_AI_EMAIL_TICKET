@@ -23,9 +23,9 @@ Use this skill for project-specific work in the AIA support-ticket application. 
 - The Python import package and project name are `aia`. Keep imports, Uvicorn targets, Docker paths, package metadata, and frontend build paths consistent with that name.
 - `POST /api/tickets` is the creation path: it validates `email_content`, invokes ticket analysis, verifies the extracted customer ID against active PostgreSQL customers, then saves the ticket.
 - Ticket analysis uses Gemini when `GEMINI_API_KEY` is set and falls back to the configured local Ollama model. Preserve structured output validation through `SupportTicketSchema`.
-- A fresh database should contain schema only—no sample customers or tickets. Do not add startup/demo inserts or trigger ticket analysis during app startup, health checks, listing, or status updates.
+- A fresh database receives 30 fictional customer fixtures (`CUST-1001` through `CUST-1030`) through the idempotent Compose migration; it must not receive sample tickets. Do not add other startup/demo inserts or trigger ticket analysis during app startup, health checks, listing, or status updates.
 - Customer records must be populated through an intentional data-management path; do not silently treat unknown customers as verified. An unknown or inactive customer is marked for review and escalated.
-- Ticket read responses intentionally omit `raw_email_content`. Keep raw source text out of list/detail API responses and logs.
+- Ticket list and creation responses omit `raw_email_content`; the individual detail endpoint intentionally returns it to populate the ticket accordion. Keep raw text out of list responses and logs, and escape it before rendering in the browser.
 - Preserve explicit failure behavior: ticket analysis/database failures become `TicketProcessingError` and an HTTP 503; missing tickets return HTTP 404. Do not mask failures with empty or success-shaped results.
 - Database changes must account for both new installations (`init.sql`) and existing named volumes (an idempotent migration). Never recommend deleting the database volume as a routine schema fix.
 - Keep credentials in `.env`/environment variables; never commit or log API keys, passwords, or submitted ticket contents.

@@ -58,7 +58,8 @@ services:
     volumes:
       - ./src/aia/sql/migrations:/migrations:ro
     entrypoint: [ "sh", "-c" ]
-    command: [ "psql -v ON_ERROR_STOP=1 -f /migrations/001_add_ticket_status.sql" ]
+    command:
+      - "psql -v ON_ERROR_STOP=1 -f /migrations/001_add_ticket_status.sql && psql -v ON_ERROR_STOP=1 -f /migrations/002_seed_mock_customers.sql"
     depends_on:
       postgres_db:
         condition: service_healthy
