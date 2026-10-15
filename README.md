@@ -126,3 +126,16 @@ uv run uvicorn aia.api.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
 The local API loads `.env` from the project directory. Set `DB_HOST=localhost` when connecting to PostgreSQL published by Compose, and `OLLAMA_BASE_URL=http://localhost:11434` when using Compose's Ollama service from the host.
+
+
+## Screenshots
+
+### UI - Intreface with Theme selected:
+![UI Screenshot 1](https://raw.githubusercontent.com/Sascha-H-Beck/AIA_AI_EMAIL_TICKET/refs/heads/main/src/aia/web/static/ui_1.png)
+
+### UI - Intreface with Theme selected and Ticket overview and ticket details:
+![UI Screenshot 2](https://raw.githubusercontent.com/Sascha-H-Beck/AIA_AI_EMAIL_TICKET/refs/heads/main/src/aia/web/static/ui_2.png)
+
+### API Documentaion OPENAPI -USeage and Reference:
+
+![UI Screenshot 2](https://raw.githubusercontent.com/Sascha-H-Beck/AIA_AI_EMAIL_TICKET/refs/heads/main/src/aia/web/static/api.png)
