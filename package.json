@@ -1,0 +1,11 @@
+{
+  "name": "aia-dashboard",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i src/aia/web/input.css -o src/aia/web/static/app.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0"
+  }
+}

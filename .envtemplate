@@ -1,0 +1,8 @@
+GEMINI_API_KEY=""
+DB_HOST=postgres_db
+DB_NAME=zerocodefx_db
+DB_USER=postgres
+DB_PASSWORD=
+DB_PORT=5432
+OLLAMA_MODEL=qwen2.5:3b
+API_PORT=8000

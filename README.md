@@ -1,0 +1,127 @@
+# AIA
+
+AIA is an AI-assisted support-ticket system with a web dashboard and a separate FastAPI service. The API analyzes submitted support emails using Google's Gemini API (`gemini-3.8-flash`) with a local Ollama fallback, verifies customers against PostgreSQL, and stores tickets and workflow statuses.
+
+## Project layout
+
+- `src/aia/main.py` contains the AI-assisted email-processing flow and PostgreSQL operations.
+- `src/aia/api/` contains the FastAPI application and ticket endpoints.
+- `src/aia/web/` contains the dashboard HTML, JavaScript, and Tailwind CSS source.
+- `src/aia/sql/init.sql` creates empty customer and support-ticket tables; new tickets start with the `new` status.
+- `src/aia/sql/migrations/001_add_ticket_status.sql` adds status persistence to existing PostgreSQL databases.
+- `pyproject.toml` declares the Python package and dependencies; `uv.lock` pins the resolved dependencies.
+- `package.json` and `package-lock.json` pin the Tailwind CSS CLI used to build production CSS.
+- `Dockerfile` builds the Tailwind assets and Python API image.
+- `docker-compose.yml` runs the API, PostgreSQL, and Ollama services.
+- `.envtemplate` lists the local environment variables to copy into `.env`.
+
+## Requirements
+
+- Docker Desktop configured to use its Linux engine, with the Docker daemon running.
+- Internet access on the first Compose startup to download the Ollama image and model.
+- A Gemini API key for Gemini-first operation; it is optional when using local Ollama.
+- Enough memory allocated to Docker Desktop for Ollama and the selected model. The default `qwen2.5:3b` model needs several gigabytes of available memory while running.
+- For running outside Docker: Python 3.12 or newer and `uv`.
+- For building the UI locally: Node.js and npm.
+
+## Configure environment
+
+In PowerShell, create your local environment file:
+
+```powershell
+Copy-Item .envtemplate .env
+```
+
+Edit `.env` and set a strong, unique `DB_PASSWORD` before starting the services. Set `DB_HOST`, `DB_NAME`, and `DB_USER` for your PostgreSQL instance as needed. Replace the empty `GEMINI_API_KEY` value with your key if you want Gemini tried first; without a key, the app uses Ollama directly. The template also includes database and model settings used by Compose. Never commit `.env` or use a shared/default database password.
+
+The Gemini model is selected in `src/aia/main.py`; the Ollama model can be changed with `OLLAMA_MODEL`.
+
+| Variable | Purpose |
+| --- | --- |
+| `GEMINI_API_KEY` | API key used by the Gemini client |
+| `DB_HOST` | Database hostname; Compose sets this to `postgres_db` |
+| `DB_NAME` | PostgreSQL database name |
+| `DB_USER` | PostgreSQL user |
+| `DB_PASSWORD` | PostgreSQL password |
+| `DB_PORT` | PostgreSQL port |
+| `OLLAMA_MODEL` | Local model to pull and use as fallback; defaults to `qwen2.5:3b` |
+| `OLLAMA_BASE_URL` | Ollama API URL for running the app outside Compose; defaults to `http://localhost:11434` |
+| `API_PORT` | Host port for the dashboard and REST API; defaults to `8000` |
+
+Keep `.env` private. It is excluded by `.gitignore` and `.dockerignore`; do not commit it or include the API key in logs or screenshots.
+
+## Build and run with Docker Compose
+
+From the project directory:
+
+```powershell
+docker compose config --quiet
+docker compose up --build -d
+```
+
+Open the web dashboard at `http://localhost:8000` (or the configured `API_PORT`). The FastAPI interactive documentation is at `http://localhost:8000/docs`.
+
+```powershell
+docker compose logs -f ticket_api
+```
+
+Compose starts PostgreSQL and Ollama, applies the idempotent ticket-status migration, pulls the configured local model if needed, then starts the API service. Existing tickets receive the `new` status. The model and database remain in named volumes. Gemini credentials are optional; if Gemini is unavailable, Ollama handles inference.
+
+A fresh database contains no sample customers or tickets. Ticket text is analyzed, customer-checked, and stored only when a ticket is submitted through `POST /api/tickets` or the dashboard. Until customer records are populated, submitted customer IDs will not verify and will be flagged for account-management review.
+
+The API binds to localhost by default. This is appropriate for local development; add authentication and access controls before exposing ticket data to a network.
+
+## Dashboard features
+
+- Browse tickets with 25 rows per page.
+- Filter for **Today**, choose a single date or inclusive date range, or use **All** to clear filters and browse the latest tickets.
+- Update a ticket to **In progress**, **Done**, or **Rejected**.
+- Create a ticket by submitting support email text for AI analysis.
+- See the API endpoints and open their interactive documentation in the API Endpoints panel.
+
+## REST API
+
+All ticket responses omit the original raw email content.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/tickets` | List tickets; optional `date_from`, `date_to`, `limit`, and `offset` query parameters |
+| `GET` | `/api/tickets/{ticket_id}` | Read a ticket by ID |
+| `POST` | `/api/tickets` | Create a ticket from `{"email_content": "..."}`; returns `201` and the persisted ticket |
+| `PATCH` | `/api/tickets/{ticket_id}/status` | Set status to `in_progress`, `done`, or `rejected` |
+| `GET` | `/health` | API health check |
+
+Example PowerShell requests:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/tickets
+Invoke-RestMethod "http://localhost:8000/api/tickets?date_from=2026-10-01&date_to=2026-10-31"
+Invoke-RestMethod http://localhost:8000/api/tickets/1
+
+$ticket = @{ email_content = "Customer CUST-5582 reports a production API outage." } | ConvertTo-Json
+Invoke-RestMethod http://localhost:8000/api/tickets -Method Post -ContentType "application/json" -Body $ticket
+
+$status = @{ status = "in_progress" } | ConvertTo-Json
+Invoke-RestMethod http://localhost:8000/api/tickets/1/status -Method Patch -ContentType "application/json" -Body $status
+```
+
+Stop services:
+
+```powershell
+docker compose down
+```
+
+PostgreSQL data and the downloaded Ollama model are stored in named volumes and remain when containers are stopped or removed. To delete both volumes, including all database data and downloaded model files, run `docker compose down --volumes`.
+
+## Run locally with uv
+
+With Python 3.12 or newer, `uv`, and PostgreSQL/Ollama reachable from the host:
+
+```powershell
+uv sync --locked
+npm ci
+npm run build:css
+uv run uvicorn aia.api.app:app --reload --host 127.0.0.1 --port 8000
+```
+
+The local API loads `.env` from the project directory. Set `DB_HOST=localhost` when connecting to PostgreSQL published by Compose, and `OLLAMA_BASE_URL=http://localhost:11434` when using Compose's Ollama service from the host.

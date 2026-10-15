@@ -1,0 +1,25 @@
+[project]
+name = "aia"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Sascha Beck", email = "info@saschahbeck.de" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.143.1",
+    "google-genai>=2.31.0",
+    "psycopg2-binary>=2.9.13",
+    "pydantic>=2.14.1",
+    "python-dotenv>=1.2.4",
+    "requests>=2.34.2",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+aia = "aia:main"
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"

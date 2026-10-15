@@ -1,0 +1,92 @@
+name: zerocodefx
+
+services:
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: zerocodefx_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:?Set DB_NAME in .env}
+      POSTGRES_USER: ${DB_USER:?Set DB_USER in .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./src/aia/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ticket_api:
+    build: .
+    container_name: zerocodefx_ticket_api
+    command: [ "uv", "run", "--no-sync", "uvicorn", "aia.api.app:app", "--host", "0.0.0.0", "--port", "8000" ]
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    environment:
+      DB_HOST: ${DB_HOST:?Set DB_HOST in .env}
+      DB_NAME: ${DB_NAME:?Set DB_NAME in .env}
+      DB_USER: ${DB_USER:?Set DB_USER in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      DB_PORT: ${DB_PORT:?Set DB_PORT in .env}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      db_migrate:
+        condition: service_completed_successfully
+      ollama_model_init:
+        condition: service_completed_successfully
+
+  db_migrate:
+    image: postgres:15-alpine
+    container_name: zerocodefx_db_migrate
+    environment:
+      PGHOST: postgres_db
+      PGDATABASE: ${DB_NAME:?Set DB_NAME in .env}
+      PGUSER: ${DB_USER:?Set DB_USER in .env}
+      PGPASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - ./src/aia/sql/migrations:/migrations:ro
+    entrypoint: [ "sh", "-c" ]
+    command: [ "psql -v ON_ERROR_STOP=1 -f /migrations/001_add_ticket_status.sql" ]
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: zerocodefx_ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: [ "CMD-SHELL", "ollama list >/dev/null 2>&1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  ollama_model_init:
+    image: ollama/ollama:latest
+    container_name: zerocodefx_ollama_model_init
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+    entrypoint: [ "ollama" ]
+    command: [ "pull", "${OLLAMA_MODEL:-qwen2.5:3b}" ]
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  ollama_data:
