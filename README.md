@@ -139,3 +139,8 @@ The local API loads `.env` from the project directory. Set `DB_HOST=localhost` w
 ### API Documentaion OPENAPI -USeage and Reference:
 
 ![UI Screenshot 2](https://raw.githubusercontent.com/Sascha-H-Beck/AIA_AI_EMAIL_TICKET/refs/heads/main/src/aia/web/static/api.png)
+
+
+### API Test with Insomnia:
+
+![API Test with Insomnia](https://raw.githubusercontent.com/Sascha-H-Beck/AIA_AI_EMAIL_TICKET/refs/heads/main/src/aia/web/static/api_insomnia_call.png)
