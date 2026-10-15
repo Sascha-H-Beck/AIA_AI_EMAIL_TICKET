@@ -194,8 +194,8 @@ New database initialization creates schema without inserting sample customers or
 
 ## 7. AI Providers and Configuration
 
-- **Gemini:** Enabled when `GEMINI_API_KEY` is configured. The implementation uses `gemini-3.8-flash` and requests JSON conforming to `SupportTicketSchema`.
-- **Ollama:** Local fallback, or the primary provider when Gemini is not configured. `OLLAMA_BASE_URL` defaults to `http://localhost:11434`; `OLLAMA_MODEL` defaults to `qwen2.5:3b`.
+- **Gemini:** Enabled when `GEMINI_API_KEY` is configured. The implementation uses `gemini-3.8-flash`, requests JSON conforming to `SupportTicketSchema`, and limits each HTTP request to 30 seconds with at most one retry before falling back.
+- **Ollama:** Local fallback, or the primary provider when Gemini is not configured. `OLLAMA_BASE_URL` defaults to `http://localhost:11434`; `OLLAMA_MODEL` defaults to `qwen2.5:3b`. Inference can take several minutes, particularly on first model load.
 - **Database:** `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` must be set. `DB_PORT` defaults to `5432`.
 - **Web/API port:** `API_PORT` configures the host-side Compose port; the application listens on port 8000 inside the container.
 

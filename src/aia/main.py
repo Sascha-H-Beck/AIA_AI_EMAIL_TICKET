@@ -289,10 +289,11 @@ def process_incoming_email(email_content: str) -> dict:
             client = genai.Client(
                 api_key=api_key,
                 http_options=types.HttpOptions(
+                    timeout=30_000,
                     retry_options=types.HttpRetryOptions(
-                        attempts=5,
+                        attempts=2,
                         initial_delay=1.0,
-                        max_delay=30.0,
+                        max_delay=5.0,
                     )
                 ),
             )

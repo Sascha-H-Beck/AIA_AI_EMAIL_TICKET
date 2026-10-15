@@ -170,9 +170,16 @@ document.querySelector("#new-ticket-form").addEventListener("submit", async (eve
   event.preventDefault();
   const button = document.querySelector("#create-ticket-button");
   const message = document.querySelector("#create-message");
+  const startedAt = Date.now();
   button.disabled = true;
   message.textContent = "Analyzing email and creating ticket…";
   message.className = "text-sm text-slate-500";
+  const progressTimer = window.setInterval(() => {
+    const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+    if (elapsedSeconds >= 10) {
+      message.textContent = `AI analysis is still running (${elapsedSeconds}s). Keep this page open; local model processing can take several minutes.`;
+    }
+  }, 1000);
   try {
     const response = await fetch("/api/tickets", {
       method: "POST",
@@ -193,6 +200,7 @@ document.querySelector("#new-ticket-form").addEventListener("submit", async (eve
     message.textContent = error.message;
     message.className = "text-sm font-semibold text-rose-700";
   } finally {
+    window.clearInterval(progressTimer);
     button.disabled = false;
   }
 });
