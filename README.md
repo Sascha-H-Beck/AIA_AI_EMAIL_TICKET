@@ -13,6 +13,7 @@ AIA is an AI-assisted support-ticket system with a web dashboard and a separate 
 - `package.json` and `package-lock.json` pin the Tailwind CSS CLI used to build production CSS.
 - `Dockerfile` builds the Tailwind assets and Python API image.
 - `docker-compose.yml` runs the API, PostgreSQL, and Ollama services.
+- `vercel.json` configures the API image as a Vercel Container Service.
 - `.envtemplate` lists the local environment variables to copy into `.env`.
 
 ## Requirements
@@ -70,6 +71,18 @@ Compose starts PostgreSQL and Ollama, applies the ticket-status migration and mo
 A fresh database starts with the schema and receives the mock customer records from the migration job. It contains no sample tickets. Ticket text is analyzed, customer-checked, and stored only when a ticket is submitted through `POST /api/tickets` or the dashboard. When an email contains one `CUST-####` ID, that exact ID is used instead of an inconsistent model extraction. The dashboard displays the matched company name; IDs outside the seed set are flagged for account-management review and shown without a company name until added to the customer table.
 
 The API binds to localhost by default. This is appropriate for local development; add authentication and access controls before exposing ticket data to a network.
+
+## Deploy to Vercel with Container Services
+
+Vercel's Container Images feature is currently in beta. The root `vercel.json` routes all requests to the `aia-api` container service, which builds the existing `Dockerfile`. The API container serves both the dashboard and its `/static` assets. Keep the Vercel project Root Directory empty so the build can access the Dockerfile, Python project files, frontend sources, and lockfiles.
+
+This deploys only the API container; Vercel does not start the services in `docker-compose.yml`. Before deploying:
+
+1. Configure a PostgreSQL database reachable from Vercel, then set `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and `DB_PORT` in the Vercel project's environment variables. Apply `src/aia/sql/init.sql` to a new database and `src/aia/sql/migrations/001_add_ticket_status.sql` when migrating an existing database. Populate real customer records through your intended data-management process; the demo customer seed is not run automatically.
+2. Set `GEMINI_API_KEY` for AI analysis. If using Ollama instead or as a fallback, also set `OLLAMA_BASE_URL` to a publicly or privately reachable Ollama service and configure `OLLAMA_MODEL`; the Compose-only hostname `ollama` is not available to the Vercel container.
+3. Deploy using the Vercel Container Images feature. The container listens on Vercel's `PORT` value (defaulting to port 80); Docker Compose overrides the container command to use its local API port.
+
+Keep database and API credentials in Vercel environment settings, never in source control. Vercel deployment does not provide persistent PostgreSQL or Ollama model storage through this API container.
 
 ## Dashboard features
 

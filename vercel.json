@@ -1,3 +1,18 @@
 {
-    "$schema": "https://openapi.vercel.sh/vercel.json"
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "services": {
+        "aia-api": {
+            "runtime": "container",
+            "root": ".",
+            "entrypoint": "Dockerfile"
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": {
+                "service": "aia-api"
+            }
+        }
+    ]
 }
