@@ -44,9 +44,16 @@ class TicketNotFoundError(LookupError):
 class SupportTicketSchema(BaseModel):
     """Validate the structured fields extracted from an incoming support email."""
 
-    customer_id: str = Field(description="Die extrahierte Kunden-ID im Format CUST-XXXX.")
-    issue_summary: str = Field(description="Prägnante, technische Zusammenfassung des Problems auf Deutsch.")
-    urgency: UrgencyLevel = Field(description="Berechnete Dringlichkeit basierend auf Systemausfall oder Business-Impact.")
+    customer_id: str = Field(description="The extracted customer ID in the format CUST-XXXX.")
+    issue_summary: str = Field(
+        description=(
+            "A concise, technical summary of the issue written in the same "
+            "language as the support email. Use English if the language is unclear."
+        )
+    )
+    urgency: UrgencyLevel = Field(
+        description="Urgency calculated from system outage or business impact."
+    )
 
 
 def get_db_connection():
@@ -308,14 +315,16 @@ def process_incoming_email(email_content: str) -> dict:
         TicketProcessingError: If analysis, customer verification, or persistence
             cannot complete.
     """
-    print("\n🤖 [Agent] Starte Analyse der unstrukturierten E-Mail...")
+    print("\n🤖 [Agent] Analyzing support email...")
 
     prompt = f"""
-    Analysiere die folgende Support-E-Mail als erfahrener System-Architekt.
-    Extrahiere die Kunden-ID (Muster: CUST-XXXX). Wenn keine gefunden wird, setze 'UNKNOWN'.
-    Fasse das Problem kurz und präzise zusammen.
+    Analyze the following support email as an experienced systems architect.
+    Identify the email's primary language and write the issue summary in that
+    same language. If the language is unclear, write the summary in English.
+    Extract the customer ID (format: CUST-XXXX). If none is present, use 'UNKNOWN'.
+    Summarize the issue concisely and precisely.
     
-    E-Mail:
+    Support email:
     \"\"\"{email_content}\"\"\"
     """
 
@@ -358,7 +367,7 @@ def process_incoming_email(email_content: str) -> dict:
                     "Ticket analysis failed with Gemini and Ollama"
                 ) from ollama_error
     else:
-        print("ℹ️ Kein Gemini API-Key konfiguriert; verwende Ollama.")
+        print("ℹ️ No Gemini API key configured; using Ollama.")
         try:
             ticket_data = generate_ticket_with_ollama(prompt)
         except Exception as ollama_error:

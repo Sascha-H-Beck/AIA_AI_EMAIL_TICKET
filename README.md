@@ -92,6 +92,7 @@ Keep database and API credentials in Vercel environment settings, never in sourc
 - Filter for **Today**, choose a single date or inclusive date range, or use **All** to clear filters and browse the latest tickets.
 - Update a ticket to **In progress**, **Done**, or **Rejected**.
 - Create a ticket by submitting support email text for AI analysis.
+- Ticket summaries use the primary language of the submitted support email (English if unclear).
 - See the API endpoints and open their interactive documentation in the API Endpoints panel.
 
 ## REST API
