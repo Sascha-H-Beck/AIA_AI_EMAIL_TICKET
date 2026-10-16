@@ -31,6 +31,7 @@ services:
       DB_USER: ${DB_USER:?Set DB_USER in .env}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_PORT: ${DB_PORT:?Set DB_PORT in .env}
+      SUPABASE_DB_URL: ${SUPABASE_DB_URL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}

@@ -45,6 +45,7 @@ The Gemini model is selected in `src/aia/main.py`; the Ollama model can be chang
 | `DB_USER` | PostgreSQL user |
 | `DB_PASSWORD` | PostgreSQL password |
 | `DB_PORT` | PostgreSQL port |
+| `SUPABASE_DB_URL` | Optional Supabase PostgreSQL connection URL; takes precedence over `DB_*` |
 | `OLLAMA_MODEL` | Local model to pull and use as fallback; defaults to `qwen2.5:3b` |
 | `OLLAMA_BASE_URL` | Ollama API URL for running the app outside Compose; defaults to `http://localhost:11434` |
 | `API_PORT` | Host port for the dashboard and REST API; defaults to `8000` |
@@ -78,11 +79,11 @@ Vercel's Container Images feature is currently in beta. The root `vercel.json` r
 
 This deploys only the API container; Vercel does not start the services in `docker-compose.yml`. Before deploying:
 
-1. Configure a PostgreSQL database reachable from Vercel, then set `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and `DB_PORT` in the Vercel project's environment variables. Apply `src/aia/sql/init.sql` to a new database and `src/aia/sql/migrations/001_add_ticket_status.sql` when migrating an existing database. Populate real customer records through your intended data-management process; the demo customer seed is not run automatically.
+1. Create a server-only `SUPABASE_DB_URL` environment variable in Vercel and set it to the Supabase Postgres **non-pooling** connection string. The app also recognizes `NEXT_PUBLIC_AIA_POSTGRES_URL_NON_POOLING` and `NEXT_PUBLIC_AIA_POSTGRES_URL` if those integration variables are already present, but do not create new database credentials with a `NEXT_PUBLIC_` prefix. The anon/publishable key, JWT secret, and service-role key variables are not used for PostgreSQL connections. The URL connection uses SSL by default; set `DB_SSLMODE` only if you need to override the default. Apply `src/aia/sql/init.sql` to a new database and `src/aia/sql/migrations/001_add_ticket_status.sql` when migrating an existing database. Populate real customer records through your intended data-management process; the demo customer seed is not run automatically.
 2. Set `GEMINI_API_KEY` for AI analysis. If using Ollama instead or as a fallback, also set `OLLAMA_BASE_URL` to a publicly or privately reachable Ollama service and configure `OLLAMA_MODEL`; the Compose-only hostname `ollama` is not available to the Vercel container.
 3. Deploy using the Vercel Container Images feature. The container listens on Vercel's `PORT` value (defaulting to port 80); Docker Compose overrides the container command to use its local API port.
 
-Keep database and API credentials in Vercel environment settings, never in source control. Vercel deployment does not provide persistent PostgreSQL or Ollama model storage through this API container.
+Keep database and API credentials in Vercel environment settings, never in source control. Vercel deployment does not provide persistent PostgreSQL or Ollama model storage through this API container. Local Docker Compose continues to use its existing `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` settings when `SUPABASE_DB_URL` is empty. To have the local API container connect to Supabase instead, set `SUPABASE_DB_URL` in `.env`; the Compose PostgreSQL service still starts for local migrations.
 
 ## Dashboard features
 

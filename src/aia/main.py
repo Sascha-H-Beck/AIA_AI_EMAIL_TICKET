@@ -56,8 +56,20 @@ def get_db_connection():
         An open psycopg2 connection.
 
     Raises:
-        RuntimeError: If a required database environment variable is missing.
+        RuntimeError: If no complete PostgreSQL configuration is available.
     """
+    database_url = (
+        os.getenv("SUPABASE_DB_URL")
+        or os.getenv("DATABASE_URL")
+        or os.getenv("NEXT_PUBLIC_AIA_POSTGRES_URL_NON_POOLING")
+        or os.getenv("NEXT_PUBLIC_AIA_POSTGRES_URL")
+    )
+    if database_url:
+        return psycopg2.connect(
+            database_url,
+            sslmode=os.getenv("DB_SSLMODE", "require"),
+        )
+
     required_settings = ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD")
     missing_settings = [
         setting for setting in required_settings if not os.getenv(setting)
@@ -66,6 +78,7 @@ def get_db_connection():
         raise RuntimeError(
             "Missing required database environment variables: "
             + ", ".join(missing_settings)
+            + ". Configure SUPABASE_DB_URL or all DB_* settings."
         )
 
     return psycopg2.connect(
